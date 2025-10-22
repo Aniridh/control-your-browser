@@ -12,26 +12,41 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+def get_client():
+    """Get Weaviate client using settings configuration."""
+    try:
+        from main import settings
+    except ImportError:
+        from server.main import settings
+    
+    # Use Weaviate v4 client
+    auth_config = None
+    if settings.WEAVIATE_API_KEY:
+        auth_config = weaviate.AuthApiKey(api_key=settings.WEAVIATE_API_KEY)
+    
+    # Parse URL properly
+    url = settings.WEAVIATE_URL or "http://localhost:8080"
+    if url.startswith("http://"):
+        host = url.replace("http://", "").split(":")[0]
+        port = int(url.split(":")[-1]) if ":" in url else 8080
+    elif url.startswith("https://"):
+        host = url.replace("https://", "").split(":")[0]
+        port = int(url.split(":")[-1]) if ":" in url else 443
+    else:
+        host = url.split(":")[0]
+        port = int(url.split(":")[-1]) if ":" in url else 8080
+    
+    return weaviate.connect_to_local(
+        host=host,
+        port=port,
+        auth_credentials=auth_config
+    )
+
 class WeaviateClient:
     def __init__(self, settings=None):
         """Initialize Weaviate client connection."""
-        if settings is None:
-            import os
-            self.weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
-            self.weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
-        else:
-            self.weaviate_url = settings.WEAVIATE_URL or "http://localhost:8080"
-            self.weaviate_api_key = settings.WEAVIATE_API_KEY
-        
-        # Initialize client
-        auth_config = None
-        if self.weaviate_api_key:
-            auth_config = weaviate.AuthApiKey(api_key=self.weaviate_api_key)
-        
-        self.client = weaviate.Client(
-            url=self.weaviate_url,
-            auth_client_secret=auth_config
-        )
+        # Use the simplified get_client function
+        self.client = get_client()
         
         # Ensure collection exists
         self._ensure_collection_exists()

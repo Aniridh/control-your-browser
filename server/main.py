@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+from pydantic import ConfigDict
 import httpx
 
 from utils.llamaindex_client import LlamaIndexClient
@@ -25,8 +26,7 @@ class Settings(BaseSettings):
     OPENAI_API_KEY: str | None = None
     PORT: int = 8000
 
-    class Config:
-        env_file = ".env"
+    model_config = ConfigDict(env_file=".env")
 
 settings = Settings()
 
@@ -88,15 +88,28 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize clients
-try:
-    llamaindex_client = LlamaIndexClient(settings)
-    weaviate_client = WeaviateClient(settings)
-    friendliai_client = FriendliaiClient(settings)
-    logger.info("All clients initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize clients: {str(e)}")
-    raise
+# Initialize clients lazily (only when needed)
+llamaindex_client = None
+weaviate_client = None
+friendliai_client = None
+
+def get_llamaindex_client():
+    global llamaindex_client
+    if llamaindex_client is None:
+        llamaindex_client = LlamaIndexClient(settings)
+    return llamaindex_client
+
+def get_weaviate_client():
+    global weaviate_client
+    if weaviate_client is None:
+        weaviate_client = WeaviateClient(settings)
+    return weaviate_client
+
+def get_friendliai_client():
+    global friendliai_client
+    if friendliai_client is None:
+        friendliai_client = FriendliaiClient(settings)
+    return friendliai_client
 
 # Pydantic models
 class AskRequest(BaseModel):
@@ -132,7 +145,7 @@ async def health_check():
         
         # Test Weaviate connection
         try:
-            weaviate_client.client.is_ready()
+            get_weaviate_client().client.is_ready()
         except Exception as e:
             health_status["weaviate"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
@@ -173,21 +186,21 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         # Extract text from PDF
         logger.info("Extracting text from PDF...")
-        extracted_text = llamaindex_client.extract_text_from_pdf(file_path)
+        extracted_text = get_llamaindex_client().extract_text_from_pdf(file_path)
         
         if not extracted_text.strip():
             raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
         
         # Process text and create embeddings
         logger.info("Processing text and creating embeddings...")
-        chunk_texts, embeddings = llamaindex_client.build_index(extracted_text)
+        chunk_texts, embeddings = get_llamaindex_client().build_index(extracted_text)
         
         # Store embeddings in Weaviate
         logger.info(f"Storing {len(chunk_texts)} chunks in Weaviate...")
         stored_chunks = 0
         for i, (text, embedding) in enumerate(zip(chunk_texts, embeddings)):
             chunk_id = f"{document_id}_chunk_{i}"
-            weaviate_client.upsert_doc(chunk_id, text, embedding)
+            get_weaviate_client().upsert_doc(chunk_id, text, embedding)
             stored_chunks += 1
         
         # Clean up uploaded file (optional - you might want to keep it)
@@ -231,11 +244,11 @@ async def ask_question(request: AskRequest):
         
         # Generate embedding for the question using LlamaIndex
         logger.info("Generating question embedding using LlamaIndex...")
-        question_embedding = llamaindex_client.get_question_embedding(request.question)
+        question_embedding = get_llamaindex_client().get_question_embedding(request.question)
         
         # Retrieve similar chunks from Weaviate
         logger.info("Retrieving relevant document chunks...")
-        similar_docs = weaviate_client.query_similar(question_embedding, top_k=5)
+        similar_docs = get_weaviate_client().query_similar(question_embedding, top_k=5)
         
         if not similar_docs:
             return AskResponse(
@@ -250,7 +263,7 @@ async def ask_question(request: AskRequest):
         
         # Generate analytical answer using Friendliai (with Gemini fallback option)
         logger.info("Generating analytical answer with Friendliai...")
-        result = await friendliai_client.generate_answer(request.question, retrieved_context, use_gemini=False)
+        result = await get_friendliai_client().generate_answer(request.question, retrieved_context, use_gemini=False)
         
         # Prepare sources for response
         sources = [
@@ -288,11 +301,11 @@ async def ask_question_gemini(request: AskRequest):
         
         # Generate embedding for the question using LlamaIndex
         logger.info("Generating question embedding using LlamaIndex...")
-        question_embedding = llamaindex_client.get_question_embedding(request.question)
+        question_embedding = get_llamaindex_client().get_question_embedding(request.question)
         
         # Retrieve similar chunks from Weaviate
         logger.info("Retrieving relevant document chunks...")
-        similar_docs = weaviate_client.query_similar(question_embedding, top_k=5)
+        similar_docs = get_weaviate_client().query_similar(question_embedding, top_k=5)
         
         if not similar_docs:
             return AskResponse(
@@ -307,7 +320,7 @@ async def ask_question_gemini(request: AskRequest):
         
         # Generate analytical answer using Gemini
         logger.info("Generating analytical answer with Gemini...")
-        result = await friendliai_client.generate_answer(request.question, retrieved_context, use_gemini=True)
+        result = await get_friendliai_client().generate_answer(request.question, retrieved_context, use_gemini=True)
         
         # Prepare sources for response
         sources = [

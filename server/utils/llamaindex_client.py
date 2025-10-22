@@ -34,8 +34,15 @@ class LlamaIndexClient:
         )
     
     def get_embedding_model(self):
-        """Get the OpenAI embedding model."""
-        return OpenAIEmbedding(model="text-embedding-3-small")
+        """Get the OpenAI embedding model with secure API key access."""
+        try:
+            from main import settings
+        except ImportError:
+            from server.main import settings
+        
+        if not settings.OPENAI_API_KEY:
+            raise ValueError("Missing OPENAI_API_KEY for embeddings.")
+        return OpenAIEmbedding(api_key=settings.OPENAI_API_KEY)
     
     def create_index_from_text(self, text: str) -> VectorStoreIndex:
         """Build a LlamaIndex index from text (chunked)."""
