@@ -15,13 +15,19 @@ import logging
 logger = logging.getLogger(__name__)
 
 class LlamaIndexClient:
-    def __init__(self):
+    def __init__(self, settings=None):
         """Initialize the LlamaIndex client with OpenAI embeddings."""
+        if settings is None:
+            import os
+            self.chunk_size = int(os.getenv("CHUNK_SIZE", "512"))
+            self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "50"))
+        else:
+            self.chunk_size = 512  # Default value
+            self.chunk_overlap = 50  # Default value
+        
         self.embed_model = self.get_embedding_model()
         
         # Configure text splitter
-        self.chunk_size = int(os.getenv("CHUNK_SIZE", "512"))
-        self.chunk_overlap = int(os.getenv("CHUNK_OVERLAP", "50"))
         self.text_splitter = SentenceSplitter(
             chunk_size=self.chunk_size,
             chunk_overlap=self.chunk_overlap

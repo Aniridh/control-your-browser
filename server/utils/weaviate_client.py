@@ -13,10 +13,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class WeaviateClient:
-    def __init__(self):
+    def __init__(self, settings=None):
         """Initialize Weaviate client connection."""
-        self.weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
-        self.weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+        if settings is None:
+            import os
+            self.weaviate_url = os.getenv("WEAVIATE_URL", "http://localhost:8080")
+            self.weaviate_api_key = os.getenv("WEAVIATE_API_KEY")
+        else:
+            self.weaviate_url = settings.WEAVIATE_URL or "http://localhost:8080"
+            self.weaviate_api_key = settings.WEAVIATE_API_KEY
         
         # Initialize client
         auth_config = None

@@ -12,10 +12,15 @@ import logging
 logger = logging.getLogger(__name__)
 
 class FriendliaiClient:
-    def __init__(self):
+    def __init__(self, settings=None):
         """Initialize Friendliai client with API keys."""
-        self.friendliai_api_key = os.getenv("FRIENDLIAI_API_KEY")
-        self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        if settings is None:
+            import os
+            self.friendliai_api_key = os.getenv("FRIENDLIAI_API_KEY")
+            self.gemini_api_key = os.getenv("GEMINI_API_KEY")
+        else:
+            self.friendliai_api_key = settings.FRIENDLIAI_API_KEY
+            self.gemini_api_key = settings.GEMINI_API_KEY
         
         if not self.friendliai_api_key:
             raise ValueError("FRIENDLIAI_API_KEY environment variable is required")

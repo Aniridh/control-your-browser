@@ -10,14 +10,24 @@ from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from dotenv import load_dotenv
+from pydantic_settings import BaseSettings
 
 from utils.llamaindex_client import LlamaIndexClient
 from utils.weaviate_client import WeaviateClient
 from utils.friendliai_client import FriendliaiClient
 
-# Load environment variables
-load_dotenv()
+class Settings(BaseSettings):
+    FRIENDLIAI_API_KEY: str | None = None
+    GEMINI_API_KEY: str | None = None
+    WEAVIATE_URL: str | None = None
+    WEAVIATE_API_KEY: str | None = None
+    OPENAI_API_KEY: str | None = None
+    PORT: int = 8000
+
+    class Config:
+        env_file = ".env"
+
+settings = Settings()
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -33,7 +43,7 @@ app = FastAPI(
 # Add CORS middleware for frontend
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:3000", "http://localhost:3001"],  # React frontend
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -41,9 +51,9 @@ app.add_middleware(
 
 # Initialize clients
 try:
-    llamaindex_client = LlamaIndexClient()
-    weaviate_client = WeaviateClient()
-    friendliai_client = FriendliaiClient()
+    llamaindex_client = LlamaIndexClient(settings)
+    weaviate_client = WeaviateClient(settings)
+    friendliai_client = FriendliaiClient(settings)
     logger.info("All clients initialized successfully")
 except Exception as e:
     logger.error(f"Failed to initialize clients: {str(e)}")
@@ -315,4 +325,4 @@ async def delete_document(document_id: str):
 
 if __name__ == "__main__":
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    uvicorn.run(app, host="0.0.0.0", port=settings.PORT)

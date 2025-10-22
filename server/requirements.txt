@@ -1,6 +1,7 @@
 fastapi
 uvicorn[standard]
 pydantic
+pydantic-settings
 llama-index
 llama-index-embeddings-openai
 weaviate-client
