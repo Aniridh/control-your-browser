@@ -1,27 +1,37 @@
-# ScreenPilot Backend Service
+# ScreenPilot Internal Research Copilot Backend
 
-A FastAPI service that powers the ScreenPilot Chrome Extension by processing page text and answering user questions using AI.
+A FastAPI service that powers the ScreenPilot Internal Research Copilot by processing PDF documents and answering analytical questions using AI.
+
+## 🚀 New Features
+
+This version includes:
+- **PDF Upload**: Upload internal research documents (PDFs)
+- **Text Extraction**: Robust PDF text extraction using pdfplumber and PyMuPDF
+- **Analytical Q&A**: Ask analytical questions about uploaded documents
+- **Source Attribution**: Get answers with source document references
+- **Research Insights**: AI-powered analysis using Friendliai
 
 ## Architecture
 
-The service implements a complete AI pipeline:
+The service implements a complete research analysis pipeline:
 
-1. **LlamaIndex**: Chunks and embeds page text using OpenAI embeddings
-2. **Weaviate**: Stores and retrieves vector embeddings for similarity search
-3. **Friendliai**: Generates intelligent answers based on retrieved context
+1. **PDF Processing**: Extract text from uploaded PDF documents
+2. **LlamaIndex**: Chunk and embed document text using OpenAI embeddings
+3. **Weaviate**: Store and retrieve vector embeddings for similarity search
+4. **Friendliai**: Generate analytical insights based on retrieved context
 
 ## Setup
 
 ### Prerequisites
 
-- Python 3.8+
+- Python 3.11+
 - Weaviate instance (local or cloud)
 - OpenAI API key
 - Friendliai API key
 
 ### Installation
 
-1. Clone the repository and navigate to the server directory:
+1. Navigate to the server directory:
 ```bash
 cd server
 ```
@@ -55,6 +65,7 @@ Optional variables:
 - `EMBEDDING_MODEL`: OpenAI embedding model (default: text-embedding-ada-002)
 - `CHUNK_SIZE`: Text chunk size (default: 512)
 - `CHUNK_OVERLAP`: Chunk overlap (default: 50)
+- `MAX_FILE_SIZE`: Maximum PDF file size in bytes (default: 10MB)
 
 ### Running Weaviate
 
@@ -70,48 +81,67 @@ docker run -p 8080:8080 -p 50051:50051 \
   semitechnologies/weaviate:latest
 ```
 
-#### Weaviate Cloud
-Sign up at [Weaviate Cloud](https://console.weaviate.cloud) and use the provided URL and API key.
-
 ## Usage
 
 ### Starting the Service
 
 ```bash
 python main.py
+# Or use the startup script:
+./start.sh
 ```
 
 The service will start on `http://localhost:8000`
 
 ### API Endpoints
 
+#### POST `/upload`
+Upload a PDF document for analysis.
+
+**Request**: Multipart form data with PDF file
+**Response**:
+```json
+{
+  "message": "Successfully processed PDF: document.pdf",
+  "document_id": "uuid-document-id",
+  "pages_processed": 10,
+  "chunks_created": 25
+}
+```
+
 #### POST `/ask`
-Main endpoint for processing questions with context.
+Ask an analytical question about uploaded documents.
 
-**Request Body:**
+**Request Body**:
 ```json
 {
-  "question": "What is the main topic of this page?",
-  "context": "Long page text content..."
+  "question": "What are the key findings in the research?"
 }
 ```
 
-**Response:**
+**Response**:
 ```json
 {
-  "answer": "The main topic is...",
-  "trace_id": "uuid-trace-id"
+  "answer": "Based on the research documents, the key findings include...",
+  "trace_id": "uuid-trace-id",
+  "sources": [
+    {
+      "id": "doc_chunk_1",
+      "text": "Relevant text excerpt...",
+      "relevance_score": 0.95
+    }
+  ]
 }
 ```
-
-#### POST `/ask-async`
-Async version of the ask endpoint for better performance.
 
 #### GET `/health`
 Health check endpoint that verifies all service connections.
 
-#### GET `/`
-Basic health check endpoint.
+#### GET `/documents`
+List uploaded documents (basic implementation).
+
+#### DELETE `/documents/{document_id}`
+Delete a document and all its chunks (basic implementation).
 
 ### API Documentation
 
@@ -128,41 +158,47 @@ server/
 ├── main.py                 # FastAPI application
 ├── requirements.txt        # Python dependencies
 ├── .env.example           # Environment variables template
+├── uploads/               # Temporary PDF storage
+├── README.md              # This documentation
+├── start.sh              # Startup script
+├── test_service.py       # Test script
 └── utils/
-    ├── llamaindex_client.py    # LlamaIndex integration
-    ├── weaviate_client.py      # Weaviate vector database
-    └── friendliai_client.py    # Friendliai AI service
+    ├── llamaindex_client.py    # PDF processing & embeddings
+    ├── weaviate_client.py      # Vector database
+    └── friendliai_client.py    # AI analysis service
 ```
 
 ### Testing
 
 Test the service with curl:
 
+**Upload a PDF**:
+```bash
+curl -X POST "http://localhost:8000/upload" \
+  -H "Content-Type: multipart/form-data" \
+  -F "file=@research_document.pdf"
+```
+
+**Ask a question**:
 ```bash
 curl -X POST "http://localhost:8000/ask" \
   -H "Content-Type: application/json" \
-  -d '{
-    "question": "What is this page about?",
-    "context": "This is a sample page about artificial intelligence and machine learning..."
-  }'
+  -d '{"question": "What are the main conclusions?"}'
 ```
 
-### Chrome Extension Integration
+### Frontend Integration
 
-The Chrome Extension should send requests to:
-- `http://localhost:8000/ask` (for development)
-- `https://your-domain.com/ask` (for production)
-
-Make sure to configure CORS settings appropriately for your deployment.
+The service is configured for CORS with `http://localhost:3000` and `http://localhost:3001` for React frontend integration.
 
 ## Troubleshooting
 
 ### Common Issues
 
-1. **Weaviate Connection Error**: Ensure Weaviate is running and accessible
-2. **OpenAI API Error**: Verify your API key and quota
-3. **Friendliai API Error**: Check your API key and endpoint URL
-4. **Import Errors**: Ensure all dependencies are installed
+1. **PDF Upload Fails**: Check file size limits and PDF format
+2. **Text Extraction Issues**: Ensure PDF contains extractable text (not scanned images)
+3. **Weaviate Connection Error**: Verify Weaviate is running and accessible
+4. **OpenAI API Error**: Check API key and quota
+5. **Friendliai API Error**: Verify API key and endpoint
 
 ### Logs
 
@@ -171,3 +207,14 @@ The service logs important events. Check the console output for debugging inform
 ### Health Check
 
 Use the `/health` endpoint to verify all service connections are working properly.
+
+## Migration from Chrome Extension Version
+
+This Research Copilot version is an evolution of the original Chrome Extension backend:
+
+- **Enhanced**: Added PDF processing capabilities
+- **Improved**: Better analytical prompts for research insights
+- **Extended**: Source attribution and document management
+- **Optimized**: Better error handling and logging
+
+The core architecture remains the same, but with enhanced capabilities for internal research document analysis.

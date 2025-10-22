@@ -18,7 +18,7 @@ class FriendliaiClient:
         if not self.api_key:
             raise ValueError("FRIENDLIAI_API_KEY environment variable is required")
         
-        self.base_url = "https://api.friendliai.com"  # Update with actual Friendliai API URL
+        self.base_url = "https://api.friendli.ai"
         self.headers = {
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json"
@@ -26,23 +26,41 @@ class FriendliaiClient:
     
     async def generate_answer(self, question: str, context: str) -> Dict[str, Any]:
         """
-        Generate an answer using Friendliai API.
+        Generate an analytical insight using Friendliai API.
         
         Args:
-            question: The user's question
+            question: The user's analytical question
             context: The retrieved context from Weaviate
             
         Returns:
             Dictionary containing answer and trace_id
         """
         try:
+            # Prepare the analytical prompt
+            prompt = f"""Based on the following research documents, please provide a concise, analytical answer to the question: "{question}"
+
+Context from documents:
+{context}
+
+Please provide:
+1. A direct answer to the question
+2. Key insights or findings
+3. Relevant data points or evidence
+4. Any limitations or caveats
+
+Format your response as clear, human-readable insights suitable for internal research analysis."""
+
             # Prepare the request payload
             payload = {
-                "question": question,
-                "context": context,
-                "model": "gpt-4",  # You can make this configurable
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "model": "llama-3.1-70b-instruct",  # Friendli's model
                 "max_tokens": 1000,
-                "temperature": 0.7
+                "temperature": 0.3  # Lower temperature for analytical responses
             }
             
             # Make the API request
@@ -63,7 +81,7 @@ class FriendliaiClient:
                 # Generate trace ID for tracking
                 trace_id = str(uuid.uuid4())
                 
-                logger.info(f"Generated answer with trace_id: {trace_id}")
+                logger.info(f"Generated analytical answer with trace_id: {trace_id}")
                 
                 return {
                     "answer": answer,
@@ -87,20 +105,38 @@ class FriendliaiClient:
         Synchronous version of generate_answer for compatibility.
         
         Args:
-            question: The user's question
+            question: The user's analytical question
             context: The retrieved context from Weaviate
             
         Returns:
             Dictionary containing answer and trace_id
         """
         try:
+            # Prepare the analytical prompt
+            prompt = f"""Based on the following research documents, please provide a concise, analytical answer to the question: "{question}"
+
+Context from documents:
+{context}
+
+Please provide:
+1. A direct answer to the question
+2. Key insights or findings
+3. Relevant data points or evidence
+4. Any limitations or caveats
+
+Format your response as clear, human-readable insights suitable for internal research analysis."""
+
             # Prepare the request payload
             payload = {
-                "question": question,
-                "context": context,
-                "model": "gpt-4",
+                "messages": [
+                    {
+                        "role": "user",
+                        "content": prompt
+                    }
+                ],
+                "model": "llama-3.1-70b-instruct",  # Friendli's model
                 "max_tokens": 1000,
-                "temperature": 0.7
+                "temperature": 0.3  # Lower temperature for analytical responses
             }
             
             # Make the API request synchronously
@@ -121,7 +157,7 @@ class FriendliaiClient:
                 # Generate trace ID for tracking
                 trace_id = str(uuid.uuid4())
                 
-                logger.info(f"Generated answer with trace_id: {trace_id}")
+                logger.info(f"Generated analytical answer with trace_id: {trace_id}")
                 
                 return {
                     "answer": answer,

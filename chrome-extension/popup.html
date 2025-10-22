@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ScreenPilot</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <div class="header">
+      <h1>ScreenPilot</h1>
+      <p class="subtitle">AI Research Copilot</p>
+    </div>
+
+    <!-- PDF Upload Section -->
+    <div class="section">
+      <h3>Upload Research Document</h3>
+      <div class="upload-area">
+        <input type="file" id="pdfInput" accept=".pdf" class="file-input">
+        <label for="pdfInput" class="file-label">
+          <div class="upload-icon">📄</div>
+          <span>Choose PDF file</span>
+        </label>
+        <div id="fileInfo" class="file-info"></div>
+      </div>
+      <button id="uploadBtn" class="btn btn-primary" disabled>
+        <span class="btn-text">Upload</span>
+        <span class="btn-loading" style="display: none;">Uploading...</span>
+      </button>
+    </div>
+
+    <!-- Question Section -->
+    <div class="section">
+      <h3>Ask AI</h3>
+      <textarea 
+        id="questionInput" 
+        class="question-input" 
+        placeholder="Ask questions about your uploaded documents..."
+        rows="4"
+      ></textarea>
+      <button id="askBtn" class="btn btn-secondary" disabled>
+        <span class="btn-text">Ask AI</span>
+        <span class="btn-loading" style="display: none;">Analyzing...</span>
+      </button>
+    </div>
+
+    <!-- AI Response Section -->
+    <div class="section">
+      <h3>AI Insights</h3>
+      <div id="responseArea" class="response-area">
+        <div class="placeholder">
+          Upload a PDF and ask questions to get AI-powered insights.
+        </div>
+      </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="status-bar">
+      <span id="statusText">Ready</span>
+    </div>
+  </div>
+
+  <script src="popup.js"></script>
+</body>
+</html>

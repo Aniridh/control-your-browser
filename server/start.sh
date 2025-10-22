@@ -1,8 +1,8 @@
 #!/bin/bash
 
-# ScreenPilot Backend Service Startup Script
+# ScreenPilot Research Copilot Backend Service Startup Script
 
-echo "Starting ScreenPilot Backend Service..."
+echo "Starting ScreenPilot Research Copilot Backend Service..."
 
 # Check if virtual environment exists
 if [ ! -d "venv" ]; then
@@ -24,6 +24,7 @@ if [ ! -f ".env" ]; then
     cp .env.example .env
     echo "Please edit .env file with your actual API keys before running the service."
     echo "Required: OPENAI_API_KEY, FRIENDLIAI_API_KEY, WEAVIATE_URL"
+    echo "This service supports PDF upload and analytical Q&A for research documents."
     exit 1
 fi
 

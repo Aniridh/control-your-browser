@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "ScreenPilot",
-  "version": "1.0.0",
-  "description": "AI-powered webpage analysis and question answering",
+  "version": "2.0.0",
+  "description": "ScreenPilot — an AI research copilot for internal reports",
   
   "permissions": [
     "activeTab",
@@ -16,7 +16,7 @@
   
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ScreenPilot - Ask AI about this page"
+    "default_title": "ScreenPilot - AI Research Copilot"
   },
   
   "content_scripts": [

@@ -58,6 +58,20 @@ class WeaviateClient:
             logger.error(f"Error ensuring collection exists: {str(e)}")
             raise
     
+    def upsert_doc(self, doc_id: str, text: str, embedding: List[float]) -> str:
+        """
+        Store document with its embedding in Weaviate.
+        
+        Args:
+            doc_id: Document ID
+            text: The text content
+            embedding: The embedding vector
+            
+        Returns:
+            The document ID
+        """
+        return self.upsert_embedding(text, embedding, doc_id)
+    
     def upsert_embedding(self, text: str, embedding: List[float], doc_id: Optional[str] = None) -> str:
         """
         Store text and its embedding in Weaviate.
