@@ -14,63 +14,30 @@ from pydantic_settings import BaseSettings
 from pydantic import ConfigDict
 import httpx
 
-from utils.llamaindex_client import LlamaIndexClient
-from utils.weaviate_client import WeaviateClient
+from utils.llamaindex_client import LlamaIndexClient, extract_text_from_pdf
+from utils.weaviate_client import WeaviateClient, upsert_doc, query_similar
 from utils.friendliai_client import FriendliaiClient
 
 class Settings(BaseSettings):
     FRIENDLIAI_API_KEY: str | None = None
+    FRIENDLIAI_ENDPOINT: str | None = None
     GEMINI_API_KEY: str | None = None
     WEAVIATE_URL: str | None = None
     WEAVIATE_API_KEY: str | None = None
     OPENAI_API_KEY: str | None = None
+    LLAMAINDEX_API_KEY: str | None = None
     PORT: int = 8000
 
-    model_config = ConfigDict(env_file=".env")
+    model_config = ConfigDict(env_file=".env", extra="ignore")
 
 settings = Settings()
-
-# Standalone query_model function for direct import
-async def query_model(prompt: str, use_gemini: bool = False) -> str:
-    """
-    Standalone function to query either Friendliai or Gemini model.
-    Can be imported directly: from server.main import query_model
-    
-    Args:
-        prompt: The prompt to send to the model
-        use_gemini: If True, use Gemini; if False, use Friendliai
-        
-    Returns:
-        Generated response text
-    """
-    if use_gemini and settings.GEMINI_API_KEY:
-        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
-        headers = {"Content-Type": "application/json"}
-        params = {"key": settings.GEMINI_API_KEY}
-        data = {"contents": [{"parts": [{"text": prompt}]}]}
-        async with httpx.AsyncClient() as client:
-            resp = await client.post(gemini_url, headers=headers, params=params, json=data)
-            resp.raise_for_status()
-            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
-
-    # Default → Friendliai
-    headers = {
-        "Authorization": f"Bearer {settings.FRIENDLIAI_API_KEY}",
-        "Content-Type": "application/json",
-    }
-    body = {
-        "model": "Meta-Llama-3-70B-Instruct",
-        "messages": [{"role": "user", "content": prompt}],
-        "temperature": 0.4,
-    }
-    async with httpx.AsyncClient() as client:
-        resp = await client.post("https://api.friendli.ai/v1/chat/completions", headers=headers, json=body)
-        resp.raise_for_status()
-        return resp.json()["choices"][0]["message"]["content"]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
+
+# ✅ Instantiate the LlamaIndex client
+llamaindex_client = LlamaIndexClient(settings)
 
 # Initialize FastAPI app
 app = FastAPI(
@@ -88,29 +55,6 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Initialize clients lazily (only when needed)
-llamaindex_client = None
-weaviate_client = None
-friendliai_client = None
-
-def get_llamaindex_client():
-    global llamaindex_client
-    if llamaindex_client is None:
-        llamaindex_client = LlamaIndexClient(settings)
-    return llamaindex_client
-
-def get_weaviate_client():
-    global weaviate_client
-    if weaviate_client is None:
-        weaviate_client = WeaviateClient(settings)
-    return weaviate_client
-
-def get_friendliai_client():
-    global friendliai_client
-    if friendliai_client is None:
-        friendliai_client = FriendliaiClient(settings)
-    return friendliai_client
-
 # Pydantic models
 class AskRequest(BaseModel):
     question: str
@@ -121,9 +65,8 @@ class AskResponse(BaseModel):
     sources: List[Dict[str, Any]]
 
 class UploadResponse(BaseModel):
+    status: str
     message: str
-    document_id: str
-    pages_processed: int
     chunks_created: int
 
 @app.get("/")
@@ -145,7 +88,8 @@ async def health_check():
         
         # Test Weaviate connection
         try:
-            get_weaviate_client().client.is_ready()
+            weaviate_client = WeaviateClient(settings)
+            weaviate_client.client.is_ready()
         except Exception as e:
             health_status["weaviate"] = f"error: {str(e)}"
             health_status["status"] = "degraded"
@@ -158,65 +102,54 @@ async def health_check():
 
 @app.post("/upload", response_model=UploadResponse)
 async def upload_pdf(file: UploadFile = File(...)):
-    """
-    Upload a PDF document for analysis.
-    
-    Pipeline:
-    1. Save PDF to uploads directory
-    2. Extract text using LlamaIndex
-    3. Chunk text and create embeddings
-    4. Store embeddings in Weaviate
-    5. Return processing summary
-    """
+    """Extract text from a PDF and build index with LlamaIndex."""
     try:
         # Validate file type
         if not file.filename.lower().endswith('.pdf'):
             raise HTTPException(status_code=400, detail="Only PDF files are supported")
         
-        # Generate unique document ID
+        # Generate unique document ID and temp path
         document_id = str(uuid.uuid4())
-        file_path = f"uploads/{document_id}_{file.filename}"
+        temp_path = f"/tmp/{document_id}_{file.filename}"
         
         # Save uploaded file
-        with open(file_path, 'wb') as f:
+        with open(temp_path, 'wb') as f:
             content = await file.read()
             f.write(content)
         
-        logger.info(f"Saved PDF: {file_path} ({len(content)} bytes)")
+        logger.info(f"Saved PDF: {temp_path} ({len(content)} bytes)")
         
         # Extract text from PDF
-        logger.info("Extracting text from PDF...")
-        extracted_text = get_llamaindex_client().extract_text_from_pdf(file_path)
-        
-        if not extracted_text.strip():
+        text = extract_text_from_pdf(temp_path)
+        if not text:
             raise HTTPException(status_code=400, detail="No text could be extracted from the PDF")
         
-        # Process text and create embeddings
-        logger.info("Processing text and creating embeddings...")
-        chunk_texts, embeddings = get_llamaindex_client().build_index(extracted_text)
+        logger.info(f"Extracted {len(text)} characters from PDF")
         
-        # Store embeddings in Weaviate
-        logger.info(f"Storing {len(chunk_texts)} chunks in Weaviate...")
-        stored_chunks = 0
-        for i, (text, embedding) in enumerate(zip(chunk_texts, embeddings)):
+        # Build index with LlamaIndex
+        logger.info("Building index with LlamaIndex...")
+        chunks, embeddings = llamaindex_client.build_index(text)
+        
+        # Store chunks and embeddings in Weaviate
+        logger.info("Storing chunks in Weaviate...")
+        for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
             chunk_id = f"{document_id}_chunk_{i}"
-            get_weaviate_client().upsert_doc(chunk_id, text, embedding)
-            stored_chunks += 1
+            upsert_doc(chunk_id, chunk, embedding)
+            logger.debug(f"Stored chunk {i+1}/{len(chunks)}")
         
-        # Clean up uploaded file (optional - you might want to keep it)
+        # Clean up uploaded file
         try:
-            os.remove(file_path)
-            logger.info(f"Cleaned up uploaded file: {file_path}")
+            os.remove(temp_path)
+            logger.info(f"Cleaned up uploaded file: {temp_path}")
         except Exception as e:
-            logger.warning(f"Could not clean up file {file_path}: {e}")
+            logger.warning(f"Could not clean up file {temp_path}: {e}")
         
         logger.info(f"Successfully processed PDF: {file.filename}")
         
         return UploadResponse(
-            message=f"Successfully processed PDF: {file.filename}",
-            document_id=document_id,
-            pages_processed=len(extracted_text.split('\n')),  # Rough estimate
-            chunks_created=stored_chunks
+            status="success",
+            message=f"File indexed with {len(chunks)} chunks",
+            chunks_created=len(chunks)
         )
         
     except HTTPException:
@@ -229,57 +162,58 @@ async def upload_pdf(file: UploadFile = File(...)):
         )
 
 @app.post("/ask", response_model=AskResponse)
-async def ask_question(request: AskRequest):
-    """
-    Ask an analytical question about uploaded documents.
-    
-    Pipeline:
-    1. Generate embedding for the question
-    2. Retrieve similar chunks from Weaviate
-    3. Generate analytical answer using Friendliai
-    4. Return answer with sources
-    """
+async def ask_question(req: AskRequest):
+    """Query the LlamaIndex and return a Friendliai answer."""
     try:
-        logger.info(f"Processing analytical question: {request.question[:100]}...")
+        logger.info(f"Processing question: {req.question[:100]}...")
         
-        # Generate embedding for the question using LlamaIndex
-        logger.info("Generating question embedding using LlamaIndex...")
-        question_embedding = get_llamaindex_client().get_question_embedding(request.question)
+        # Generate query vector using LlamaIndex
+        query_vector = llamaindex_client.query_index(req.question)
         
         # Retrieve similar chunks from Weaviate
-        logger.info("Retrieving relevant document chunks...")
-        similar_docs = get_weaviate_client().query_similar(question_embedding, top_k=5)
+        context_results = query_similar(query_vector, top_k=3)
         
-        if not similar_docs:
+        if not context_results:
             return AskResponse(
                 answer="No relevant documents found. Please upload some PDF documents first.",
                 trace_id=str(uuid.uuid4()),
                 sources=[]
             )
         
-        # Prepare context for Friendliai
-        retrieved_context = "\n\n".join([doc["text"] for doc in similar_docs])
-        logger.info(f"Retrieved {len(similar_docs)} relevant chunks")
+        # Prepare context
+        context = "\n\n".join([r["text"] for r in context_results])
+        logger.info(f"Retrieved {len(context_results)} relevant chunks for question")
         
-        # Generate analytical answer using Friendliai (with Gemini fallback option)
-        logger.info("Generating analytical answer with Friendliai...")
-        result = await get_friendliai_client().generate_answer(request.question, retrieved_context, use_gemini=False)
+        # Prepare prompt for Friendliai
+        prompt = f"""You are ScreenPilot, an internal research assistant.
+Use the context below to answer the question accurately.
+
+Context:
+{context}
+
+Question: {req.question}
+Answer:"""
+        
+        # Generate answer using Friendliai
+        friendliai_client = FriendliaiClient(settings)
+        answer = await friendliai_client.query_model(prompt)
         
         # Prepare sources for response
         sources = [
             {
-                "id": doc["id"],
-                "text": doc["text"][:200] + "..." if len(doc["text"]) > 200 else doc["text"],
-                "relevance_score": doc.get("score", 0)
+                "id": result.get("id", ""),
+                "text": result["text"][:200] + "..." if len(result["text"]) > 200 else result["text"],
+                "relevance_score": result.get("score", 0)
             }
-            for doc in similar_docs
+            for result in context_results
         ]
         
-        logger.info(f"Successfully processed question with trace_id: {result['trace_id']}")
+        trace_id = str(uuid.uuid4())
+        logger.info(f"Successfully processed question with trace_id: {trace_id}")
         
         return AskResponse(
-            answer=result["answer"],
-            trace_id=result["trace_id"],
+            answer=answer,
+            trace_id=trace_id,
             sources=sources
         )
         
@@ -291,52 +225,58 @@ async def ask_question(request: AskRequest):
         )
 
 @app.post("/ask-gemini", response_model=AskResponse)
-async def ask_question_gemini(request: AskRequest):
-    """
-    Ask an analytical question using Gemini as the reasoning model.
-    This endpoint is for testing Gemini fallback functionality.
-    """
+async def ask_question_gemini(req: AskRequest):
+    """Answer user question using Gemini as the reasoning model."""
     try:
-        logger.info(f"Processing analytical question with Gemini: {request.question[:100]}...")
+        logger.info(f"Processing question with Gemini: {req.question[:100]}...")
         
-        # Generate embedding for the question using LlamaIndex
-        logger.info("Generating question embedding using LlamaIndex...")
-        question_embedding = get_llamaindex_client().get_question_embedding(request.question)
+        # Generate query vector using LlamaIndex
+        query_vector = llamaindex_client.query_index(req.question)
         
         # Retrieve similar chunks from Weaviate
-        logger.info("Retrieving relevant document chunks...")
-        similar_docs = get_weaviate_client().query_similar(question_embedding, top_k=5)
+        context_results = query_similar(query_vector, top_k=3)
         
-        if not similar_docs:
+        if not context_results:
             return AskResponse(
                 answer="No relevant documents found. Please upload some PDF documents first.",
                 trace_id=str(uuid.uuid4()),
                 sources=[]
             )
         
-        # Prepare context for Gemini
-        retrieved_context = "\n\n".join([doc["text"] for doc in similar_docs])
-        logger.info(f"Retrieved {len(similar_docs)} relevant chunks")
+        # Prepare context
+        context = "\n\n".join([r["text"] for r in context_results])
+        logger.info(f"Retrieved {len(context_results)} relevant chunks for question")
         
-        # Generate analytical answer using Gemini
-        logger.info("Generating analytical answer with Gemini...")
-        result = await get_friendliai_client().generate_answer(request.question, retrieved_context, use_gemini=True)
+        # Prepare prompt for Gemini
+        prompt = f"""You are ScreenPilot, an internal research assistant.
+Use the context below to answer the question accurately.
+
+Context:
+{context}
+
+Question: {req.question}
+Answer:"""
+        
+        # Generate answer using Gemini
+        friendliai_client = FriendliaiClient(settings)
+        answer = await friendliai_client.query_model(prompt, use_gemini=True)
         
         # Prepare sources for response
         sources = [
             {
-                "id": doc["id"],
-                "text": doc["text"][:200] + "..." if len(doc["text"]) > 200 else doc["text"],
-                "relevance_score": doc.get("score", 0)
+                "id": result.get("id", ""),
+                "text": result["text"][:200] + "..." if len(result["text"]) > 200 else result["text"],
+                "relevance_score": result.get("score", 0)
             }
-            for doc in similar_docs
+            for result in context_results
         ]
         
-        logger.info(f"Successfully processed question with Gemini, trace_id: {result['trace_id']}")
+        trace_id = str(uuid.uuid4())
+        logger.info(f"Successfully processed question with Gemini, trace_id: {trace_id}")
         
         return AskResponse(
-            answer=result["answer"],
-            trace_id=result["trace_id"],
+            answer=answer,
+            trace_id=trace_id,
             sources=sources
         )
         

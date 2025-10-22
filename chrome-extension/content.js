@@ -1,25 +1,13 @@
 // ScreenPilot Chrome Extension - Content Script
-// Placeholder for future overlay functionality
+// Listens for AI answers and injects overlay
 
-// Log when content script loads (for debugging)
-console.log('ScreenPilot loaded on:', window.location.href);
-
-// Future overlay logic will be implemented here
-// This could include:
-// - Document highlighting
-// - Inline annotations
-// - Context-aware suggestions
-// - Research assistant overlays
-
-// Placeholder function for future functionality
-function initializeOverlay() {
-  // TODO: Implement overlay features
-  console.log('Overlay initialization placeholder');
-}
-
-// Initialize when DOM is ready
-if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', initializeOverlay);
-} else {
-  initializeOverlay();
-}
+chrome.runtime.onMessage.addListener((msg) => {
+  if (msg.type === "SHOW_OVERLAY") {
+    if (!document.getElementById("screenpilot-overlay")) {
+      const script = document.createElement("script");
+      script.src = chrome.runtime.getURL("overlay.js");
+      (document.head || document.documentElement).appendChild(script);
+    }
+    window.postMessage({type: "SCREENPILOT_RESPONSE", data: msg.data}, "*");
+  }
+});

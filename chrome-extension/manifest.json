@@ -26,6 +26,13 @@
     }
   ],
   
+  "web_accessible_resources": [
+    {
+      "resources": ["overlay.js", "overlay.css"],
+      "matches": ["<all_urls>"]
+    }
+  ],
+  
   "icons": {
     "16": "icon.png",
     "48": "icon.png",

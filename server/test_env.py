@@ -16,6 +16,7 @@ def test_keys():
     print("🔑 ScreenPilot Configuration Status:")
     print("=" * 40)
     print(f"Friendliai API Key: {'✅ Set' if settings.FRIENDLIAI_API_KEY else '❌ Missing'}")
+    print(f"Friendliai Endpoint URL: {settings.FRIENDLIAI_ENDPOINT_URL or '❌ Not set (serverless default)'}")
     print(f"Gemini API Key: {'✅ Set' if settings.GEMINI_API_KEY else '❌ Missing'}")
     print(f"Weaviate URL: {settings.WEAVIATE_URL or '❌ Not set'}")
     print(f"Weaviate API Key: {'✅ Set' if settings.WEAVIATE_API_KEY else '❌ Not set (optional)'}")
@@ -47,11 +48,19 @@ def test_connections():
     print("\n🔌 Testing Service Connections:")
     print("=" * 40)
     
+    # Show which Friendliai base URL will be used
+    try:
+        from utils.friendliai_client import FriendliaiClient
+        client = FriendliaiClient(settings)
+        print(f"✅ Friendliai base URL: {client.friendliai_base_url}")
+    except Exception as e:
+        print(f"❌ Friendliai client init: Failed - {str(e)}")
+    
     # Test Weaviate connection
     try:
-        from utils.weaviate_client import get_client
-        client = get_client()
-        client.is_ready()
+        from utils.weaviate_client import WeaviateClient
+        wc = WeaviateClient(settings)
+        wc.client.is_ready()
         print("✅ Weaviate connection: OK")
     except Exception as e:
         print(f"❌ Weaviate connection: Failed - {str(e)}")
@@ -59,8 +68,9 @@ def test_connections():
     # Test OpenAI embedding model
     try:
         from utils.llamaindex_client import LlamaIndexClient
-        client = LlamaIndexClient()
-        embed_model = client.get_embedding_model()
+        lc = LlamaIndexClient(settings)
+        embed_model = lc.get_embedding_model()
+        _ = embed_model
         print("✅ OpenAI embedding model: OK")
     except Exception as e:
         print(f"❌ OpenAI embedding model: Failed - {str(e)}")
