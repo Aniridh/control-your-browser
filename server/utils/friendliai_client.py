@@ -49,11 +49,20 @@ class FriendliaiClient:
             headers = {"Content-Type": "application/json"}
             params = {"key": self.gemini_api_key}
             data = {"contents": [{"parts": [{"text": prompt}]}]}
-            async with httpx.AsyncClient() as client:
+            async with httpx.AsyncClient(timeout=30.0) as client:
                 resp = await client.post(gemini_url, headers=headers, params=params, json=data)
                 resp.raise_for_status()
                 out = resp.json()
-                return out["candidates"][0]["content"]["parts"][0]["text"]
+                
+                # Better error handling for Gemini response
+                if "candidates" not in out or not out["candidates"]:
+                    raise Exception("No candidates in Gemini response")
+                
+                candidate = out["candidates"][0]
+                if "content" not in candidate or "parts" not in candidate["content"]:
+                    raise Exception("Invalid Gemini response structure")
+                
+                return candidate["content"]["parts"][0]["text"]
 
         # --- Friendliai routing ---
         endpoint = self.friendliai_endpoint

@@ -42,16 +42,20 @@ uploadBtn.addEventListener("click", async () => {
 
   setStatus("Uploading document...");
   try {
-    // Use background script to handle the request
-    const response = await chrome.runtime.sendMessage({
-      action: 'uploadPDF',
-      data: { file: file, filename: file.name }
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const res = await fetch(`${API_BASE}/upload`, { 
+      method: "POST", 
+      body: formData 
     });
     
-    if (response.success) {
-      setStatus(`✅ Uploaded successfully: ${response.data.message}`);
+    if (res.ok) {
+      const data = await res.json();
+      setStatus(`✅ Uploaded successfully: ${data.message}`);
     } else {
-      setStatus("Upload failed: " + response.error, false);
+      const errorData = await res.json();
+      setStatus(`Upload failed: ${errorData.detail || res.statusText}`, false);
     }
   } catch (err) {
     setStatus("Upload failed: " + err.message, false);
@@ -65,22 +69,51 @@ analyzePageBtn.addEventListener("click", async () => {
     chrome.scripting.executeScript(
       {
         target: { tabId: tabs[0].id },
-        func: () => document.body.innerText.slice(0, 50000), // limit to 50k chars
+        func: () => {
+          // Extract text from the page
+          const text = document.body.innerText || document.body.textContent || '';
+          const title = document.title || '';
+          const url = window.location.href;
+          
+          // Clean up the text
+          const cleanText = text.replace(/\s+/g, ' ').trim();
+          
+          // Combine title and content
+          const fullText = `${title}\n\n${cleanText}`.slice(0, 50000);
+          
+          return {
+            text: fullText,
+            url: url,
+            title: title,
+            length: fullText.length
+          };
+        },
       },
       async (results) => {
-        const pageText = results[0].result;
-        setStatus("Sending page data to backend...");
+        const result = results[0].result;
+        const pageText = result.text;
+        const url = result.url;
+        
+        if (!pageText || pageText.length < 10) {
+          setStatus("❌ No readable text found on this page", false);
+          return;
+        }
+        
+        setStatus(`Extracted ${result.length} characters from: ${result.title}`);
+        
         try {
-          // Use background script to handle the request
-          const response = await chrome.runtime.sendMessage({
-            action: 'uploadWebpage',
-            data: { text: pageText, url: tabs[0].url }
+          const res = await fetch(`${API_BASE}/upload-web`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ text: pageText, url: url })
           });
           
-          if (response.success) {
-            setStatus(`✅ Page indexed (${response.data.chunks_indexed} chunks)`);
+          if (res.ok) {
+            const data = await res.json();
+            setStatus(`✅ Page indexed (${data.chunks_indexed} chunks)`);
           } else {
-            setStatus("Page analysis failed: " + response.error, false);
+            const errorData = await res.json();
+            setStatus(`Page analysis failed: ${errorData.detail || res.statusText}`, false);
           }
         } catch (err) {
           setStatus("Page analysis failed: " + err.message, false);
@@ -99,17 +132,19 @@ askBtn.addEventListener("click", async () => {
   setStatus("Querying backend...");
   
   try {
-    // Use background script to handle the request
-    const response = await chrome.runtime.sendMessage({
-      action: 'askQuestion',
-      data: { question }
+    const res = await fetch(`${API_BASE}/ask`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ question }),
     });
     
-    if (response.success) {
-      responseBox.innerText = response.data.answer || "No answer returned.";
+    if (res.ok) {
+      const data = await res.json();
+      responseBox.innerText = data.answer || "No answer returned.";
       setStatus("AI analysis complete");
     } else {
-      responseBox.innerText = "Error: " + response.error;
+      const errorData = await res.json();
+      responseBox.innerText = `Error: ${errorData.detail || res.statusText}`;
       setStatus("Request failed", false);
     }
   } catch (err) {

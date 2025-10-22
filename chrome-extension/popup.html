@@ -4,28 +4,36 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>ScreenPilot</title>
-  <link rel="stylesheet" href="styles.css">
+  <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
-  <h1>ScreenPilot</h1>
+  <div class="container">
+    <h1 class="title">🚀 ScreenPilot</h1>
+    <p class="subtitle">Your on-page AI research copilot</p>
 
-  <div class="upload-section">
-    <label for="pdfFile">Upload PDF:</label>
-    <input type="file" id="pdfFile" accept="application/pdf">
-    <button id="uploadBtn">Upload</button>
+    <div class="card upload-card">
+      <label class="label" for="pdfFile">Upload PDF</label>
+      <div class="upload-row">
+        <input type="file" id="pdfFile" accept="application/pdf" />
+        <button id="uploadBtn" class="btn primary">Upload</button>
+      </div>
+    </div>
+
+    <div class="card analyze-card">
+      <button id="analyzePageBtn" class="btn outline">Analyze This Page</button>
+    </div>
+
+    <div class="card ask-card">
+      <textarea id="question" placeholder="Ask something about your content..."></textarea>
+      <button id="askBtn" class="btn primary full-width">Ask AI</button>
+    </div>
+
+    <div class="card response-card">
+      <div id="responseBox" class="response-box">Your AI response will appear here...</div>
+    </div>
+
+    <div id="statusBar" class="status-bar">Ready</div>
   </div>
-
-  <div class="analyze-section">
-    <button id="analyzePageBtn">Analyze This Page</button>
-  </div>
-
-  <div class="ask-section">
-    <textarea id="question" placeholder="Ask something..."></textarea>
-    <button id="askBtn">Ask AI</button>
-  </div>
-
-  <div id="responseBox" class="response-box"></div>
-  <div id="statusBar" class="status-bar"></div>
 
   <script src="popup.js"></script>
 </body>

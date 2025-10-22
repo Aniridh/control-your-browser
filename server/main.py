@@ -6,6 +6,7 @@ FastAPI service for uploading PDFs and asking analytical questions using LlamaIn
 import os
 import uuid
 import logging
+import asyncio
 from typing import Dict, Any, List
 from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
@@ -131,8 +132,8 @@ async def upload_pdf(file: UploadFile = File(...)):
         # Store chunks and embeddings in Weaviate
         logger.info("Storing chunks in Weaviate...")
         for i, (chunk, embedding) in enumerate(zip(chunks, embeddings)):
-            chunk_id = f"{document_id}_chunk_{i}"
-            upsert_doc(chunk_id, chunk, embedding)
+            chunk_id = str(uuid.uuid4())  # Generate proper UUID for each chunk
+            upsert_doc(chunk_id, chunk, embedding, source=file.filename)
             logger.debug(f"Stored chunk {i+1}/{len(chunks)}")
         
         # Clean up uploaded file
@@ -195,12 +196,21 @@ Answer:"""
         # Generate answer using Gemini first, then Friendliai, then fallback
         answer = None
         try:
-            # Try Gemini first
+            # Try Gemini first with retry logic
             friendliai_client = FriendliaiClient(settings)
-            answer = await friendliai_client.query_model(prompt, use_gemini=True)
-            logger.info("Successfully generated answer using Gemini")
+            for attempt in range(2):  # Try up to 2 times
+                try:
+                    answer = await friendliai_client.query_model(prompt, use_gemini=True)
+                    logger.info("Successfully generated answer using Gemini")
+                    break
+                except Exception as e:
+                    if attempt == 0:
+                        logger.warning(f"Gemini API attempt {attempt + 1} failed: {e}. Retrying...")
+                        await asyncio.sleep(1)  # Wait 1 second before retry
+                    else:
+                        logger.warning(f"Gemini API failed after 2 attempts: {e}. Trying Friendliai...")
+                        raise e
         except Exception as e:
-            logger.warning(f"Gemini API failed: {e}. Trying Friendliai...")
             try:
                 # Try Friendliai as fallback
                 answer = await friendliai_client.query_model(prompt, use_gemini=False)
