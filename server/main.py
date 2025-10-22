@@ -7,11 +7,10 @@ import os
 import uuid
 import logging
 from typing import Dict, Any, List
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from dotenv import load_dotenv
-import aiofiles
 
 from utils.llamaindex_client import LlamaIndexClient
 from utils.weaviate_client import WeaviateClient
@@ -117,9 +116,9 @@ async def upload_pdf(file: UploadFile = File(...)):
         file_path = f"uploads/{document_id}_{file.filename}"
         
         # Save uploaded file
-        async with aiofiles.open(file_path, 'wb') as f:
+        with open(file_path, 'wb') as f:
             content = await file.read()
-            await f.write(content)
+            f.write(content)
         
         logger.info(f"Saved PDF: {file_path} ({len(content)} bytes)")
         

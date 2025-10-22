@@ -5,7 +5,6 @@ Handles PDF processing, text extraction, and embedding generation for ScreenPilo
 
 import os
 import pdfplumber
-import fitz  # PyMuPDF
 from typing import List, Tuple, Optional
 from llama_index.core import Document, VectorStoreIndex, Settings
 from llama_index.core.node_parser import SentenceSplitter
@@ -33,7 +32,7 @@ class LlamaIndexClient:
     
     def extract_text_from_pdf(self, file_path: str) -> str:
         """
-        Extract text from PDF file using multiple methods for robustness.
+        Extract text from PDF file using pdfplumber.
         
         Args:
             file_path: Path to the PDF file
@@ -44,31 +43,13 @@ class LlamaIndexClient:
         try:
             text = ""
             
-            # Method 1: Try pdfplumber first (better for complex layouts)
-            try:
-                with pdfplumber.open(file_path) as pdf:
-                    for page in pdf.pages:
-                        page_text = page.extract_text()
-                        if page_text:
-                            text += page_text + "\n"
-                logger.info(f"Extracted text using pdfplumber: {len(text)} characters")
-            except Exception as e:
-                logger.warning(f"pdfplumber failed: {e}, trying PyMuPDF")
+            with pdfplumber.open(file_path) as pdf:
+                for page in pdf.pages:
+                    page_text = page.extract_text()
+                    if page_text:
+                        text += page_text + "\n"
             
-            # Method 2: Fallback to PyMuPDF if pdfplumber fails
-            if not text.strip():
-                try:
-                    doc = fitz.open(file_path)
-                    for page_num in range(doc.page_count):
-                        page = doc[page_num]
-                        page_text = page.get_text()
-                        if page_text:
-                            text += page_text + "\n"
-                    doc.close()
-                    logger.info(f"Extracted text using PyMuPDF: {len(text)} characters")
-                except Exception as e:
-                    logger.error(f"PyMuPDF also failed: {e}")
-                    raise Exception(f"Failed to extract text from PDF: {e}")
+            logger.info(f"Extracted text using pdfplumber: {len(text)} characters")
             
             if not text.strip():
                 raise Exception("No text could be extracted from the PDF")
