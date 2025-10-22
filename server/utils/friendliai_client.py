@@ -49,10 +49,34 @@ class FriendliaiClient:
             Generated response text
         """
         try:
-            if use_gemini:
-                return await self._query_gemini(prompt)
-            else:
-                return await self._query_friendliai(prompt)
+            if use_gemini and self.gemini_api_key:
+                # Use Gemini API
+                gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
+                headers = {"Content-Type": "application/json"}
+                params = {"key": self.gemini_api_key}
+                data = {"contents": [{"parts": [{"text": prompt}]}]}
+                
+                async with httpx.AsyncClient() as client:
+                    resp = await client.post(gemini_url, headers=headers, params=params, json=data)
+                    resp.raise_for_status()
+                    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            
+            # Default → Friendliai
+            headers = {
+                "Authorization": f"Bearer {self.friendliai_api_key}",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "model": "Meta-Llama-3-70B-Instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.4,
+            }
+            
+            async with httpx.AsyncClient() as client:
+                resp = await client.post("https://api.friendli.ai/v1/chat/completions", headers=headers, json=body)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
+                
         except Exception as e:
             logger.error(f"Error querying model: {str(e)}")
             # Fallback to the other model if one fails
@@ -221,10 +245,34 @@ Format your response as clear, human-readable insights suitable for internal res
     def _query_model_sync(self, prompt: str, use_gemini: bool = False) -> str:
         """Synchronous version of query_model."""
         try:
-            if use_gemini:
-                return self._query_gemini_sync(prompt)
-            else:
-                return self._query_friendliai_sync(prompt)
+            if use_gemini and self.gemini_api_key:
+                # Use Gemini API
+                gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
+                headers = {"Content-Type": "application/json"}
+                params = {"key": self.gemini_api_key}
+                data = {"contents": [{"parts": [{"text": prompt}]}]}
+                
+                with httpx.Client() as client:
+                    resp = client.post(gemini_url, headers=headers, params=params, json=data)
+                    resp.raise_for_status()
+                    return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+            
+            # Default → Friendliai
+            headers = {
+                "Authorization": f"Bearer {self.friendliai_api_key}",
+                "Content-Type": "application/json",
+            }
+            body = {
+                "model": "Meta-Llama-3-70B-Instruct",
+                "messages": [{"role": "user", "content": prompt}],
+                "temperature": 0.4,
+            }
+            
+            with httpx.Client() as client:
+                resp = client.post("https://api.friendli.ai/v1/chat/completions", headers=headers, json=body)
+                resp.raise_for_status()
+                return resp.json()["choices"][0]["message"]["content"]
+                
         except Exception as e:
             logger.error(f"Error querying model: {str(e)}")
             # Fallback to the other model if one fails

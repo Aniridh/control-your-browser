@@ -11,6 +11,7 @@ from fastapi import FastAPI, HTTPException, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from pydantic_settings import BaseSettings
+import httpx
 
 from utils.llamaindex_client import LlamaIndexClient
 from utils.weaviate_client import WeaviateClient
@@ -28,6 +29,44 @@ class Settings(BaseSettings):
         env_file = ".env"
 
 settings = Settings()
+
+# Standalone query_model function for direct import
+async def query_model(prompt: str, use_gemini: bool = False) -> str:
+    """
+    Standalone function to query either Friendliai or Gemini model.
+    Can be imported directly: from server.main import query_model
+    
+    Args:
+        prompt: The prompt to send to the model
+        use_gemini: If True, use Gemini; if False, use Friendliai
+        
+    Returns:
+        Generated response text
+    """
+    if use_gemini and settings.GEMINI_API_KEY:
+        gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
+        headers = {"Content-Type": "application/json"}
+        params = {"key": settings.GEMINI_API_KEY}
+        data = {"contents": [{"parts": [{"text": prompt}]}]}
+        async with httpx.AsyncClient() as client:
+            resp = await client.post(gemini_url, headers=headers, params=params, json=data)
+            resp.raise_for_status()
+            return resp.json()["candidates"][0]["content"]["parts"][0]["text"]
+
+    # Default → Friendliai
+    headers = {
+        "Authorization": f"Bearer {settings.FRIENDLIAI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    body = {
+        "model": "Meta-Llama-3-70B-Instruct",
+        "messages": [{"role": "user", "content": prompt}],
+        "temperature": 0.4,
+    }
+    async with httpx.AsyncClient() as client:
+        resp = await client.post("https://api.friendli.ai/v1/chat/completions", headers=headers, json=body)
+        resp.raise_for_status()
+        return resp.json()["choices"][0]["message"]["content"]
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
