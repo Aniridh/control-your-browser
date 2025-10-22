@@ -1,0 +1,34 @@
+{
+  "manifest_version": 3,
+  "name": "ScreenPilot",
+  "version": "1.0.0",
+  "description": "AI-powered webpage analysis and question answering",
+  
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  
+  "host_permissions": [
+    "http://localhost:8000/*"
+  ],
+  
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ScreenPilot - Ask AI about this page"
+  },
+  
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["content.js"]
+    }
+  ],
+  
+  "icons": {
+    "16": "icon.png",
+    "48": "icon.png",
+    "128": "icon.png"
+  }
+}
