@@ -5,9 +5,9 @@ ScreenPilot is an AI-powered research copilot that helps you analyze internal re
 ## 🚀 Features
 
 - **PDF Document Upload**: Upload research PDFs through a clean Chrome extension interface
-- **Retrieval-Augmented Generation (RAG)**: Complete RAG pipeline with LlamaIndex, Weaviate, and Friendliai
+- **Retrieval-Augmented Generation (RAG)**: Complete RAG pipeline with Friendliai embeddings and reasoning
 - **AI-Powered Analysis**: Ask questions about your documents using Friendliai's advanced reasoning
-- **Vector Search**: Leverage LlamaIndex and Weaviate for semantic document retrieval
+- **Vector Search**: Leverage Friendliai embeddings and Weaviate for semantic document retrieval
 - **Auto-Endpoint Routing**: Automatically detects and uses dedicated Friendliai endpoints or falls back to serverless API
 - **Gemini Fallback**: Optional Gemini integration as a backup reasoning model
 - **Real-time Processing**: Fast document processing and instant AI responses
@@ -19,9 +19,9 @@ ScreenPilot is an AI-powered research copilot that helps you analyze internal re
 │   Chrome        │    │   FastAPI       │    │   AI Services   │
 │   Extension     │◄──►│   Backend       │◄──►│                 │
 │                 │    │                 │    │ • Friendliai    │
-│ • PDF Upload    │    │ • RAG Pipeline  │    │ • LlamaIndex    │
-│ • Q&A Interface │    │ • PDF Processing│    │ • Weaviate      │
-│ • Results Display│   │ • Embeddings    │    │ • Gemini        │
+│ • PDF Upload    │    │ • RAG Pipeline  │    │ • Weaviate      │
+│ • Q&A Interface │    │ • PDF Processing│    │ • Gemini        │
+│ • Results Display│   │ • Embeddings    │    │                 │
 └─────────────────┘    │ • Vector Search │    └─────────────────┘
                        │ • AI Generation │
                        └─────────────────┘
@@ -29,9 +29,9 @@ ScreenPilot is an AI-powered research copilot that helps you analyze internal re
 
 ### RAG Pipeline Flow
 
-1. **Document Upload**: PDF → Text Extraction → Chunking → Embedding Generation
+1. **Document Upload**: PDF → Text Extraction → Chunking → Friendliai Embedding Generation
 2. **Vector Storage**: Embeddings stored in Weaviate with metadata
-3. **Question Processing**: Question → Embedding → Similarity Search
+3. **Question Processing**: Question → Friendliai Embedding → Similarity Search
 4. **Context Retrieval**: Top-k relevant chunks retrieved from Weaviate
 5. **Answer Generation**: Context + Question → Friendliai → Structured Response
 
@@ -39,11 +39,9 @@ ScreenPilot is an AI-powered research copilot that helps you analyze internal re
 
 ### Backend
 - **FastAPI**: Modern Python web framework
-- **LlamaIndex**: Document processing and embeddings
+- **Friendliai**: AI reasoning and embedding generation
 - **Weaviate**: Vector database for semantic search
-- **Friendliai**: Primary AI reasoning API
 - **Gemini**: Fallback AI model
-- **OpenAI**: Embedding generation
 
 ### Frontend
 - **Chrome Extension**: Manifest V3 extension
@@ -90,13 +88,9 @@ nano .env
 Edit the `.env` file with your API keys:
 
 ```env
-# Friendliai Configuration
+# Friendliai Configuration (Required)
 FRIENDLIAI_API_KEY=your_friendliai_api_key_here
-FRIENDLIAI_ENDPOINT=https://api.friendli.ai/dedicated  # Optional: Replace with custom deployment URL
-
-# OpenAI Configuration (for embeddings)
-OPENAI_API_KEY=your_openai_api_key_here
-LLAMAINDEX_API_KEY=your_llamaindex_api_key_here  # Optional: Falls back to OPENAI_API_KEY
+FRIENDLIAI_ENDPOINT=https://api.friendli.ai/v1/chat/completions  # Optional: Replace with custom deployment URL
 
 # Weaviate Configuration
 WEAVIATE_URL=http://localhost:8080
@@ -257,9 +251,9 @@ FRIENDLIAI_ENDPOINT=https://api.friendli.ai/v1/deployments/your-endpoint/invoke
 
 ### Embedding Configuration
 
-- **Model**: OpenAI text-embedding-ada-002
-- **Chunk Size**: 512 tokens (configurable)
-- **Chunk Overlap**: 50 tokens (configurable)
+- **Model**: Friendliai meta-llama/Llama-3-8B-Instruct
+- **Chunk Size**: 1000 characters (configurable)
+- **Endpoint**: Automatically routes to `/v1/embeddings` endpoint
 
 ### Vector Search
 

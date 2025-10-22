@@ -8,15 +8,13 @@ This package contains utility modules for the ScreenPilot Research Copilot backe
 """
 
 from .friendliai_client import FriendliaiClient
-from .llamaindex_client import LlamaIndexClient, extract_text_from_pdf, extract_and_store_pdf, answer_question
+from .llamaindex_client import LlamaIndexClient, extract_text_from_pdf
 from .weaviate_client import WeaviateClient, upsert_doc, query_similar
 
 __all__ = [
     "FriendliaiClient",
     "LlamaIndexClient",
     "extract_text_from_pdf",
-    "extract_and_store_pdf", 
-    "answer_question",
     "WeaviateClient",
     "upsert_doc",
     "query_similar"

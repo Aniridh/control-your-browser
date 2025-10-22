@@ -24,8 +24,6 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     WEAVIATE_URL: str | None = None
     WEAVIATE_API_KEY: str | None = None
-    OPENAI_API_KEY: str | None = None
-    LLAMAINDEX_API_KEY: str | None = None
     PORT: int = 8000
 
     model_config = ConfigDict(env_file=".env", extra="ignore")
@@ -126,9 +124,9 @@ async def upload_pdf(file: UploadFile = File(...)):
         
         logger.info(f"Extracted {len(text)} characters from PDF")
         
-        # Build index with LlamaIndex
-        logger.info("Building index with LlamaIndex...")
-        chunks, embeddings = llamaindex_client.build_index(text)
+        # Build index with LlamaIndex (Friendliai embeddings)
+        logger.info("Building index with LlamaIndex (Friendliai embeddings)...")
+        chunks, embeddings = await llamaindex_client.build_index(text)
         
         # Store chunks and embeddings in Weaviate
         logger.info("Storing chunks in Weaviate...")
@@ -167,8 +165,8 @@ async def ask_question(req: AskRequest):
     try:
         logger.info(f"Processing question: {req.question[:100]}...")
         
-        # Generate query vector using LlamaIndex
-        query_vector = llamaindex_client.query_index(req.question)
+        # Generate query vector using LlamaIndex (Friendliai embeddings)
+        query_vector = await llamaindex_client.query_index(req.question)
         
         # Retrieve similar chunks from Weaviate
         context_results = query_similar(query_vector, top_k=3)
@@ -230,8 +228,8 @@ async def ask_question_gemini(req: AskRequest):
     try:
         logger.info(f"Processing question with Gemini: {req.question[:100]}...")
         
-        # Generate query vector using LlamaIndex
-        query_vector = llamaindex_client.query_index(req.question)
+        # Generate query vector using LlamaIndex (Friendliai embeddings)
+        query_vector = await llamaindex_client.query_index(req.question)
         
         # Retrieve similar chunks from Weaviate
         context_results = query_similar(query_vector, top_k=3)

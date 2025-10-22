@@ -1,72 +1,92 @@
 """
-LlamaIndex client for PDF text extraction, chunking and embedding with RAG integration.
-Handles PDF processing, text extraction, and embedding generation for ScreenPilot Research Copilot.
+LlamaIndex client for PDF processing and RAG operations.
+Now uses Friendliai exclusively for both embeddings and reasoning.
 """
 
 import os
-import pdfplumber
-import uuid
-import asyncio
-from typing import List, Tuple, Optional, Dict, Any
-from llama_index.embeddings.openai import OpenAIEmbedding
+import httpx
 import logging
+from typing import List, Tuple, Optional
+import uuid
 
 logger = logging.getLogger(__name__)
 
 class LlamaIndexClient:
-    """LlamaIndex client for PDF processing and RAG operations."""
-    
+    """
+    LlamaIndexClient now uses Friendliai embeddings directly.
+    Handles PDF text extraction, chunking, and Friendliai embedding generation.
+    """
+
     def __init__(self, settings=None):
-        """Initialize LlamaIndex client with settings."""
-        self.settings = settings
-        self.embedder = None
-        self._initialize_embedder()
-    
-    def _initialize_embedder(self):
-        """Initialize the embedding model."""
+        """Initialize LlamaIndex client with Friendliai embeddings."""
         try:
-            # Import here to avoid circular imports
-            if not self.settings:
+            # Get settings if not provided
+            if not settings:
                 try:
                     from main import settings
                 except ImportError:
                     from server.main import settings
-                self.settings = settings
             
-            api_key = self.settings.LLAMAINDEX_API_KEY or self.settings.OPENAI_API_KEY
-            if not api_key:
-                raise ValueError("OPENAI_API_KEY or LLAMAINDEX_API_KEY is required for embeddings")
+            self.friendliai_api_key = settings.FRIENDLIAI_API_KEY if settings else os.getenv("FRIENDLIAI_API_KEY")
+            self.friendliai_endpoint = settings.FRIENDLIAI_ENDPOINT if settings else os.getenv("FRIENDLIAI_ENDPOINT")
             
-            self.embedder = OpenAIEmbedding(api_key=api_key)
-            logger.info("LlamaIndex embedder initialized successfully")
+            if not self.friendliai_api_key:
+                raise ValueError("FRIENDLIAI_API_KEY is missing from environment.")
+            
+            # Set embedding endpoint
+            if self.friendliai_endpoint and self.friendliai_endpoint.startswith("https://api.friendli.ai"):
+                # Use dedicated endpoint for embeddings
+                self.embed_url = self.friendliai_endpoint.replace("/chat/completions", "/embeddings")
+            else:
+                # Use default serverless endpoint
+                self.embed_url = "https://api.friendli.ai/v1/embeddings"
+            
+            logger.info("✅ LlamaIndex (Friendliai) embedder initialized successfully")
             
         except Exception as e:
             logger.error(f"Failed to initialize LlamaIndex embedder: {str(e)}")
             raise
-    
-    def build_index(self, text: str) -> Tuple[List[str], List[List[float]]]:
+
+    async def _get_embedding(self, text: str) -> List[float]:
+        """Get embedding from Friendliai API."""
+        try:
+            headers = {
+                "Authorization": f"Bearer {self.friendliai_api_key}",
+                "Content-Type": "application/json",
+            }
+            payload = {
+                "input": text,
+                "model": "meta-llama/Llama-3-8B-Instruct"
+            }
+            
+            async with httpx.AsyncClient(timeout=30) as client:
+                resp = await client.post(self.embed_url, headers=headers, json=payload)
+                resp.raise_for_status()
+                data = resp.json()
+                return data["data"][0]["embedding"]
+                
+        except Exception as e:
+            logger.error(f"Error getting embedding from Friendliai: {str(e)}")
+            raise
+
+    async def build_index(self, context_text: str) -> Tuple[List[str], List[List[float]]]:
         """
-        Build index from text by chunking and creating embeddings.
+        Chunk the input context and create Friendliai embeddings for each chunk.
         
         Args:
-            text: The text content to index
+            context_text: The text content to index
             
         Returns:
             Tuple of (chunks, embeddings)
         """
         try:
-            if not self.embedder:
-                self._initialize_embedder()
-            
-            # Create chunks (1000 characters each)
-            chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
+            chunks = [context_text[i:i+1000] for i in range(0, len(context_text), 1000)]
             logger.info(f"Created {len(chunks)} chunks from text")
             
-            # Generate embeddings for each chunk
             embeddings = []
             for i, chunk in enumerate(chunks):
                 try:
-                    emb = self.embedder.get_text_embedding(chunk)
+                    emb = await self._get_embedding(chunk)
                     embeddings.append(emb)
                     logger.debug(f"Generated embedding for chunk {i+1}/{len(chunks)}")
                 except Exception as e:
@@ -79,10 +99,10 @@ class LlamaIndexClient:
         except Exception as e:
             logger.error(f"Error in build_index: {str(e)}")
             raise
-    
-    def query_index(self, question: str) -> List[float]:
+
+    async def query_index(self, question: str) -> List[float]:
         """
-        Generate query embedding for a question.
+        Generate query embedding for a question using Friendliai.
         
         Args:
             question: The question to generate embedding for
@@ -91,10 +111,7 @@ class LlamaIndexClient:
             Query embedding vector
         """
         try:
-            if not self.embedder:
-                self._initialize_embedder()
-            
-            q_emb = self.embedder.get_text_embedding(question)
+            q_emb = await self._get_embedding(question)
             logger.debug(f"Generated query embedding for question: {question[:50]}...")
             return q_emb
             
@@ -102,114 +119,30 @@ class LlamaIndexClient:
             logger.error(f"Error in query_index: {str(e)}")
             raise
 
-def extract_text_from_pdf(file_path: str) -> str:
-    """Extract text from PDF pages."""
-    text = ""
-    with pdfplumber.open(file_path) as pdf:
-        for page in pdf.pages:
-            text += (page.extract_text() or "") + "\n"
-    return text.strip()
 
-async def extract_and_store_pdf(file_path: str, document_id: str) -> int:
-    """Embed and store PDF text chunks into Weaviate."""
-    try:
-        # Import here to avoid circular imports
-        from server.main import settings
-        from utils.weaviate_client import upsert_doc
+def extract_text_from_pdf(file_path: str) -> str:
+    """
+    Extract text from PDF using pdfplumber.
+    
+    Args:
+        file_path: Path to the PDF file
         
-        # Extract text from PDF
-        text = extract_text_from_pdf(file_path)
-        if not text:
-            raise Exception("No text could be extracted from the PDF")
+    Returns:
+        Extracted text content
+    """
+    try:
+        import pdfplumber
+        
+        text = ""
+        with pdfplumber.open(file_path) as pdf:
+            for page in pdf.pages:
+                page_text = page.extract_text()
+                if page_text:
+                    text += page_text + "\n"
         
         logger.info(f"Extracted {len(text)} characters from PDF")
-        
-        # Initialize embedder
-        api_key = settings.LLAMAINDEX_API_KEY or settings.OPENAI_API_KEY
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY or LLAMAINDEX_API_KEY is required for embeddings")
-        
-        embedder = OpenAIEmbedding(api_key=api_key)
-        
-        # Create chunks (1000 characters each)
-        chunks = [text[i:i+1000] for i in range(0, len(text), 1000)]
-        logger.info(f"Created {len(chunks)} chunks from PDF")
-        
-        # Embed and store each chunk
-        for i, chunk in enumerate(chunks):
-            try:
-                emb = embedder.get_text_embedding(chunk)
-                chunk_id = f"{document_id}_chunk_{i}"
-                upsert_doc(chunk_id, chunk, emb)
-                logger.debug(f"Stored chunk {i+1}/{len(chunks)}")
-            except Exception as e:
-                logger.error(f"Error storing chunk {i}: {e}")
-                raise
-        
-        logger.info(f"Successfully stored {len(chunks)} chunks in Weaviate")
-        return len(chunks)
+        return text.strip()
         
     except Exception as e:
-        logger.error(f"Error in extract_and_store_pdf: {str(e)}")
-        raise
-
-async def answer_question(question: str, use_gemini: bool = False) -> Tuple[str, str, List[dict]]:
-    """Retrieve context from Weaviate and generate answer with Friendliai."""
-    try:
-        # Import here to avoid circular imports
-        from server.main import settings
-        from utils.weaviate_client import query_similar
-        from utils.friendliai_client import FriendliaiClient
-        
-        # Initialize embedder
-        api_key = settings.LLAMAINDEX_API_KEY or settings.OPENAI_API_KEY
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY or LLAMAINDEX_API_KEY is required for embeddings")
-        
-        embedder = OpenAIEmbedding(api_key=api_key)
-        
-        # Generate question embedding
-        q_emb = embedder.get_text_embedding(question)
-        
-        # Retrieve similar chunks from Weaviate
-        matches = query_similar(q_emb, top_k=3)
-        
-        if not matches:
-            return "No relevant documents found. Please upload some PDF documents first.", str(uuid.uuid4()), []
-        
-        # Prepare context
-        context = "\n\n".join([m["text"] for m in matches])
-        logger.info(f"Retrieved {len(matches)} relevant chunks for question")
-        
-        # Prepare prompt for Friendliai
-        prompt = f"""You are ScreenPilot, an internal research assistant.
-Use the context below to answer the question accurately.
-
-Context:
-{context}
-
-Question: {question}
-Answer:"""
-        
-        # Generate answer using Friendliai
-        friendliai_client = FriendliaiClient(settings)
-        answer = await friendliai_client.query_model(prompt, use_gemini=use_gemini)
-        
-        # Prepare sources for response
-        sources = [
-            {
-                "id": match.get("id", ""),
-                "text": match["text"][:200] + "..." if len(match["text"]) > 200 else match["text"],
-                "relevance_score": match.get("score", 0)
-            }
-            for match in matches
-        ]
-        
-        trace_id = str(uuid.uuid4())
-        logger.info(f"Generated answer with trace_id: {trace_id}")
-        
-        return answer, trace_id, sources
-        
-    except Exception as e:
-        logger.error(f"Error in answer_question: {str(e)}")
+        logger.error(f"Error extracting text from PDF: {str(e)}")
         raise
