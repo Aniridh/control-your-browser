@@ -8,6 +8,25 @@ const questionBox = document.getElementById("question");
 const responseBox = document.getElementById("responseBox");
 const statusBar = document.getElementById("statusBar");
 
+// Check backend health on popup load
+async function checkBackendHealth() {
+  try {
+    const response = await fetch(`${API_BASE}/health`);
+    if (response.ok) {
+      setStatus("✅ Connected to ScreenPilot backend", true);
+    } else {
+      setStatus("❌ Backend connection failed", false);
+    }
+  } catch (err) {
+    setStatus("❌ Backend not running - start server first", false);
+  }
+}
+
+// Initialize popup
+document.addEventListener('DOMContentLoaded', () => {
+  checkBackendHealth();
+});
+
 function setStatus(msg, success = true) {
   statusBar.innerText = msg;
   statusBar.style.color = success ? "green" : "red";
@@ -21,14 +40,19 @@ uploadBtn.addEventListener("click", async () => {
     return;
   }
 
-  const formData = new FormData();
-  formData.append("file", file);
-
   setStatus("Uploading document...");
   try {
-    const res = await fetch(`${API_BASE}/upload`, { method: "POST", body: formData });
-    const data = await res.json();
-    setStatus(`✅ Uploaded successfully: ${data.message}`);
+    // Use background script to handle the request
+    const response = await chrome.runtime.sendMessage({
+      action: 'uploadPDF',
+      data: { file: file, filename: file.name }
+    });
+    
+    if (response.success) {
+      setStatus(`✅ Uploaded successfully: ${response.data.message}`);
+    } else {
+      setStatus("Upload failed: " + response.error, false);
+    }
   } catch (err) {
     setStatus("Upload failed: " + err.message, false);
   }
@@ -47,13 +71,17 @@ analyzePageBtn.addEventListener("click", async () => {
         const pageText = results[0].result;
         setStatus("Sending page data to backend...");
         try {
-          const res = await fetch(`${API_BASE}/upload-web`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ text: pageText, url: tabs[0].url })
+          // Use background script to handle the request
+          const response = await chrome.runtime.sendMessage({
+            action: 'uploadWebpage',
+            data: { text: pageText, url: tabs[0].url }
           });
-          const data = await res.json();
-          setStatus(`✅ Page indexed (${data.chunks_indexed} chunks)`);
+          
+          if (response.success) {
+            setStatus(`✅ Page indexed (${response.data.chunks_indexed} chunks)`);
+          } else {
+            setStatus("Page analysis failed: " + response.error, false);
+          }
         } catch (err) {
           setStatus("Page analysis failed: " + err.message, false);
         }
@@ -69,15 +97,21 @@ askBtn.addEventListener("click", async () => {
 
   responseBox.innerText = "Thinking...";
   setStatus("Querying backend...");
+  
   try {
-    const res = await fetch(`${API_BASE}/ask`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ question, context: "" }),
+    // Use background script to handle the request
+    const response = await chrome.runtime.sendMessage({
+      action: 'askQuestion',
+      data: { question }
     });
-    const data = await res.json();
-    responseBox.innerText = data.answer || data.detail || "No answer returned.";
-    setStatus("AI analysis complete");
+    
+    if (response.success) {
+      responseBox.innerText = response.data.answer || "No answer returned.";
+      setStatus("AI analysis complete");
+    } else {
+      responseBox.innerText = "Error: " + response.error;
+      setStatus("Request failed", false);
+    }
   } catch (err) {
     responseBox.innerText = "Error: " + err.message;
     setStatus("Request failed", false);

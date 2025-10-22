@@ -192,9 +192,22 @@ Context:
 Question: {req.question}
 Answer:"""
         
-        # Generate answer using Friendliai
-        friendliai_client = FriendliaiClient(settings)
-        answer = await friendliai_client.query_model(prompt)
+        # Generate answer using Gemini first, then Friendliai, then fallback
+        answer = None
+        try:
+            # Try Gemini first
+            friendliai_client = FriendliaiClient(settings)
+            answer = await friendliai_client.query_model(prompt, use_gemini=True)
+            logger.info("Successfully generated answer using Gemini")
+        except Exception as e:
+            logger.warning(f"Gemini API failed: {e}. Trying Friendliai...")
+            try:
+                # Try Friendliai as fallback
+                answer = await friendliai_client.query_model(prompt, use_gemini=False)
+                logger.info("Successfully generated answer using Friendliai")
+            except Exception as e2:
+                logger.warning(f"Friendliai API also failed: {e2}. Using fallback response.")
+                answer = f"I found {len(context_results)} relevant document(s) related to your question. However, I'm currently unable to generate a detailed response due to API connectivity issues. The relevant content includes: {context[:200]}..."
         
         # Prepare sources for response
         sources = [

@@ -45,7 +45,7 @@ class FriendliaiClient:
 
         # --- Gemini fallback (optional) ---
         if use_gemini and self.gemini_api_key:
-            gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro:generateContent"
+            gemini_url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent"
             headers = {"Content-Type": "application/json"}
             params = {"key": self.gemini_api_key}
             data = {"contents": [{"parts": [{"text": prompt}]}]}

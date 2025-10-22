@@ -28,6 +28,10 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       handleQuestion(request.data, sendResponse);
       return true;
       
+    case 'uploadWebpage':
+      handleWebpageUpload(request.data, sendResponse);
+      return true;
+      
     case 'checkBackendHealth':
       checkBackendHealth(sendResponse);
       return true;
@@ -70,6 +74,37 @@ async function handlePDFUpload(data, sendResponse) {
     
   } catch (error) {
     console.error('PDF upload error:', error);
+    sendResponse({ success: false, error: error.message });
+  }
+}
+
+// Handle webpage upload
+async function handleWebpageUpload(data, sendResponse) {
+  try {
+    const { text, url } = data;
+    
+    // Get backend URL from storage
+    const settings = await chrome.storage.sync.get(['backendUrl']);
+    const backendUrl = settings.backendUrl || 'http://localhost:8000';
+    
+    // Upload webpage content to backend
+    const response = await fetch(`${backendUrl}/upload-web`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ text, url })
+    });
+    
+    if (!response.ok) {
+      throw new Error(`Webpage upload failed: ${response.status} ${response.statusText}`);
+    }
+    
+    const result = await response.json();
+    sendResponse({ success: true, data: result });
+    
+  } catch (error) {
+    console.error('Webpage upload error:', error);
     sendResponse({ success: false, error: error.message });
   }
 }
