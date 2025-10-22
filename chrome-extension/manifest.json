@@ -1,41 +1,20 @@
 {
   "manifest_version": 3,
   "name": "ScreenPilot",
-  "version": "2.0.0",
-  "description": "ScreenPilot — an AI research copilot for internal reports",
-  
-  "permissions": [
-    "activeTab",
-    "scripting",
-    "storage"
-  ],
-  
-  "host_permissions": [
-    "http://localhost:8000/*"
-  ],
-  
+  "version": "2.1.0",
+  "description": "AI Research Copilot with Friendliai, Weaviate, and LlamaIndex.",
+  "permissions": ["activeTab", "scripting", "storage"],
+  "host_permissions": ["http://localhost:8000/*", "https://*/*", "http://*/*"],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "ScreenPilot - AI Research Copilot"
+    "default_icon": "icon.png"
   },
-  
+  "background": { "service_worker": "background.js" },
   "content_scripts": [
-    {
-      "matches": ["<all_urls>"],
-      "js": ["content.js"]
-    }
+    { "matches": ["<all_urls>"], "js": ["content.js"], "css": ["overlay.css"] }
   ],
-  
   "web_accessible_resources": [
-    {
-      "resources": ["overlay.js", "overlay.css"],
-      "matches": ["<all_urls>"]
-    }
+    { "resources": ["overlay.js", "overlay.css"], "matches": ["<all_urls>"] }
   ],
-  
-  "icons": {
-    "16": "icon.png",
-    "48": "icon.png",
-    "128": "icon.png"
-  }
+  "icons": { "16": "icon.png", "48": "icon.png", "128": "icon.png" }
 }

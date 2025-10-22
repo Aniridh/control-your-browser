@@ -299,6 +299,47 @@ async def list_documents():
         logger.error(f"Error listing documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
+@app.post("/upload-web")
+async def upload_web(data: dict):
+    """Upload webpage text content and index it."""
+    try:
+        text = data.get("text", "")
+        url = data.get("url", "unknown")
+        
+        if not text:
+            raise HTTPException(status_code=400, detail="No text content provided")
+        
+        logger.info(f"Processing webpage text from {url} ({len(text)} characters)")
+        
+        # Build index with LlamaIndex (Simple Text Embeddings)
+        chunks, embeddings = await llamaindex_client.build_index(text)
+        
+        logger.info(f"Created {len(chunks)} chunks from webpage text")
+        
+        # Store chunks in Weaviate
+        for i, (chunk_text, embedding) in enumerate(zip(chunks, embeddings)):
+            chunk_id = str(uuid.uuid4())  # Generate proper UUID
+            upsert_doc(chunk_id, chunk_text, embedding, source=url)
+            logger.debug(f"Stored chunk {i+1}/{len(chunks)}")
+        
+        logger.info(f"Successfully processed webpage: {url}")
+        
+        return {
+            "status": "success",
+            "message": f"Webpage indexed with {len(chunks)} chunks",
+            "chunks_indexed": len(chunks),
+            "url": url
+        }
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error processing webpage upload: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process webpage: {str(e)}"
+        )
+
 @app.delete("/documents/{document_id}")
 async def delete_document(document_id: str):
     """Delete a document and all its chunks from Weaviate."""

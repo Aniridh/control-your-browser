@@ -73,7 +73,7 @@ class WeaviateClient:
             logger.error(f"Error initializing schema: {str(e)}")
             raise
 
-    def upsert_embedding(self, text: str, embedding: list, doc_id: Optional[str] = None):
+    def upsert_embedding(self, text: str, embedding: list, doc_id: Optional[str] = None, source: str = None):
         """Insert a document and its vector embedding."""
         try:
             collection: Collection = self.client.collections.get("PageContext")
@@ -83,8 +83,11 @@ class WeaviateClient:
                 import uuid
                 doc_id = str(uuid.uuid4())
             
+            # Use source if provided, otherwise use doc_id
+            source_value = source if source else doc_id
+            
             obj = collection.data.insert(
-                properties={"text": text, "source": doc_id},
+                properties={"text": text, "source": source_value},
                 vector=embedding,
                 uuid=doc_id
             )
@@ -167,11 +170,11 @@ def get_client():
     client_instance = WeaviateClient(settings)
     return client_instance.client
 
-def upsert_doc(doc_id: str, text: str, embedding: List[float]) -> str:
+def upsert_doc(doc_id: str, text: str, embedding: List[float], source: str = None) -> str:
     """Store document with its embedding in Weaviate."""
     try:
         client_instance = WeaviateClient()
-        return client_instance.upsert_doc(doc_id, text, embedding)
+        return client_instance.upsert_embedding(text, embedding, doc_id, source)
     except Exception as e:
         logger.error(f"Error upserting document: {str(e)}")
         raise
