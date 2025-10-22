@@ -2,6 +2,18 @@
 
 A FastAPI service for uploading PDFs and asking analytical questions about research documents.
 
+### Environment Setup
+1. Copy `.env.example` → `.env`
+2. Fill in your API keys.
+3. Run tests:
+   ```bash
+   uv run python test_env.py
+   ```
+4. Start backend:
+   ```bash
+   uvicorn server.main:app --reload --port 8000
+   ```
+
 ## Setup & Run Instructions
 
 ```bash
