@@ -180,9 +180,9 @@ async def ask_question(request: AskRequest):
     try:
         logger.info(f"Processing analytical question: {request.question[:100]}...")
         
-        # Generate embedding for the question
-        logger.info("Generating question embedding...")
-        question_embedding = llamaindex_client.query_index(request.question)
+        # Generate embedding for the question using LlamaIndex
+        logger.info("Generating question embedding using LlamaIndex...")
+        question_embedding = llamaindex_client.get_question_embedding(request.question)
         
         # Retrieve similar chunks from Weaviate
         logger.info("Retrieving relevant document chunks...")
@@ -199,9 +199,9 @@ async def ask_question(request: AskRequest):
         retrieved_context = "\n\n".join([doc["text"] for doc in similar_docs])
         logger.info(f"Retrieved {len(similar_docs)} relevant chunks")
         
-        # Generate analytical answer using Friendliai
+        # Generate analytical answer using Friendliai (with Gemini fallback option)
         logger.info("Generating analytical answer with Friendliai...")
-        result = await friendliai_client.generate_answer(request.question, retrieved_context)
+        result = await friendliai_client.generate_answer(request.question, retrieved_context, use_gemini=False)
         
         # Prepare sources for response
         sources = [
@@ -226,6 +226,63 @@ async def ask_question(request: AskRequest):
         raise HTTPException(
             status_code=500,
             detail=f"Failed to process question: {str(e)}"
+        )
+
+@app.post("/ask-gemini", response_model=AskResponse)
+async def ask_question_gemini(request: AskRequest):
+    """
+    Ask an analytical question using Gemini as the reasoning model.
+    This endpoint is for testing Gemini fallback functionality.
+    """
+    try:
+        logger.info(f"Processing analytical question with Gemini: {request.question[:100]}...")
+        
+        # Generate embedding for the question using LlamaIndex
+        logger.info("Generating question embedding using LlamaIndex...")
+        question_embedding = llamaindex_client.get_question_embedding(request.question)
+        
+        # Retrieve similar chunks from Weaviate
+        logger.info("Retrieving relevant document chunks...")
+        similar_docs = weaviate_client.query_similar(question_embedding, top_k=5)
+        
+        if not similar_docs:
+            return AskResponse(
+                answer="No relevant documents found. Please upload some PDF documents first.",
+                trace_id=str(uuid.uuid4()),
+                sources=[]
+            )
+        
+        # Prepare context for Gemini
+        retrieved_context = "\n\n".join([doc["text"] for doc in similar_docs])
+        logger.info(f"Retrieved {len(similar_docs)} relevant chunks")
+        
+        # Generate analytical answer using Gemini
+        logger.info("Generating analytical answer with Gemini...")
+        result = await friendliai_client.generate_answer(request.question, retrieved_context, use_gemini=True)
+        
+        # Prepare sources for response
+        sources = [
+            {
+                "id": doc["id"],
+                "text": doc["text"][:200] + "..." if len(doc["text"]) > 200 else doc["text"],
+                "relevance_score": doc.get("score", 0)
+            }
+            for doc in similar_docs
+        ]
+        
+        logger.info(f"Successfully processed question with Gemini, trace_id: {result['trace_id']}")
+        
+        return AskResponse(
+            answer=result["answer"],
+            trace_id=result["trace_id"],
+            sources=sources
+        )
+        
+    except Exception as e:
+        logger.error(f"Error processing question with Gemini: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to process question with Gemini: {str(e)}"
         )
 
 @app.get("/documents")
