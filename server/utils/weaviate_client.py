@@ -8,7 +8,7 @@ import os
 import weaviate
 from weaviate.auth import AuthApiKey
 from weaviate.collections import Collection
-from weaviate.collections.classes.config import Configure
+from weaviate.collections.classes.config import Configure, Property, DataType
 from typing import List, Dict, Any, Optional
 import logging
 
@@ -37,9 +37,13 @@ class WeaviateClient:
                 )
                 logger.info("Connected to Weaviate Cloud")
             else:
-                # Local Docker connection
-                self.client = weaviate.connect_to_local(skip_init_checks=True)
-                logger.info("Connected to local Weaviate instance")
+                # Local Docker connection with HTTP only (no gRPC)
+                self.client = weaviate.connect_to_local(
+                    host="localhost",
+                    port=8080,
+                    skip_init_checks=True
+                )
+                logger.info("Connected to local Weaviate instance (HTTP only)")
 
             self.init_schema()
         except Exception as e:
@@ -59,8 +63,8 @@ class WeaviateClient:
                 name="PageContext",
                 vectorizer_config=Configure.Vectorizer.none(),
                 properties=[
-                    Configure.Property(name="text", data_type="text"),
-                    Configure.Property(name="source", data_type="string"),
+                    Property(name="text", data_type=DataType.TEXT),
+                    Property(name="source", data_type=DataType.TEXT),
                 ],
             )
             logger.info("Created PageContext collection")
