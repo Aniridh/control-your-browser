@@ -1,7 +1,5 @@
 const API_BASE = "http://localhost:8000"; // update if deployed
 
-const uploadBtn = document.getElementById("uploadBtn");
-const pdfInput = document.getElementById("pdfFile");
 const analyzePageBtn = document.getElementById("analyzePageBtn");
 const askBtn = document.getElementById("askBtn");
 const questionBox = document.getElementById("question");
@@ -31,36 +29,6 @@ function setStatus(msg, success = true) {
   statusBar.innerText = msg;
   statusBar.style.color = success ? "green" : "red";
 }
-
-// PDF Upload
-uploadBtn.addEventListener("click", async () => {
-  const file = pdfInput.files[0];
-  if (!file) {
-    setStatus("Please select a PDF first.", false);
-    return;
-  }
-
-  setStatus("Uploading document...");
-  try {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const res = await fetch(`${API_BASE}/upload`, { 
-      method: "POST", 
-      body: formData 
-    });
-    
-    if (res.ok) {
-      const data = await res.json();
-      setStatus(`✅ Uploaded successfully: ${data.message}`);
-    } else {
-      const errorData = await res.json();
-      setStatus(`Upload failed: ${errorData.detail || res.statusText}`, false);
-    }
-  } catch (err) {
-    setStatus("Upload failed: " + err.message, false);
-  }
-});
 
 // Analyze Current Page
 analyzePageBtn.addEventListener("click", async () => {

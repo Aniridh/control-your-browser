@@ -46,29 +46,6 @@ body {
   box-shadow: 0 6px 14px rgba(0,0,0,0.12);
 }
 
-.label {
-  font-size: 13px;
-  font-weight: 500;
-  margin-bottom: 8px;
-  display: block;
-  color: #333;
-}
-
-.upload-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-input[type="file"] {
-  flex: 1;
-  font-size: 12px;
-  border: 1px solid #ccc;
-  border-radius: 6px;
-  padding: 4px;
-  margin-right: 8px;
-  background: #fafafa;
-}
 
 textarea {
   width: 100%;
