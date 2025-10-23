@@ -399,10 +399,32 @@ async def clear_context():
             detail=f"Failed to clear context: {str(e)}"
         )
 
-@app.get("/test-clear")
-async def test_clear():
-    """Test endpoint to verify server is running updated code."""
-    return {"message": "Clear context endpoint is available", "status": "ok"}
+@app.post("/clear-context")
+async def clear_context():
+    """Clear all documents from Weaviate to start fresh."""
+    try:
+        # Get Weaviate client and delete the entire collection
+        weaviate_client = WeaviateClient()
+        
+        # Delete the PageContext collection
+        weaviate_client.delete_collection()
+        
+        # Recreate the collection
+        weaviate_client.init_schema()
+        
+        logger.info("Successfully cleared all context from Weaviate")
+        
+        return {
+            "status": "success",
+            "message": "All context cleared successfully"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error clearing context: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear context: {str(e)}"
+        )
 
 @app.post("/upload-web")
 async def upload_web(data: dict):
