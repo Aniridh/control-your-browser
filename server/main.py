@@ -25,6 +25,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY: str | None = None
     WEAVIATE_URL: str | None = None
     WEAVIATE_API_KEY: str | None = None
+    CHUNK_SIZE: int = 2000  # Configurable chunk size for better context
     PORT: int = 8000
 
     model_config = ConfigDict(env_file=".env", extra="ignore")
@@ -98,6 +99,54 @@ async def health_check():
     except Exception as e:
         logger.error(f"Health check failed: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Health check failed: {str(e)}")
+
+@app.get("/documents")
+async def list_documents():
+    """List all indexed documents for debugging."""
+    try:
+        # Get all documents from Weaviate
+        weaviate_client = WeaviateClient()
+        collection = weaviate_client.client.collections.get("PageContext")
+        
+        # Query all documents (limit to 50 for performance)
+        result = collection.query.fetch_objects(limit=50)
+        
+        documents = []
+        for obj in result.objects:
+            documents.append({
+                "id": str(obj.uuid),
+                "text": obj.properties.get("text", "")[:200] + "..." if len(obj.properties.get("text", "")) > 200 else obj.properties.get("text", ""),
+                "source": obj.properties.get("source", ""),
+                "full_text_length": len(obj.properties.get("text", ""))
+            })
+        
+        return {
+            "total_documents": len(documents),
+            "documents": documents
+        }
+        
+    except Exception as e:
+        logger.error(f"Error listing documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to list documents: {str(e)}")
+
+@app.get("/search/{query}")
+async def search_documents(query: str):
+    """Search for specific content in indexed documents."""
+    try:
+        # Generate query embedding
+        query_vector = await llamaindex_client.query_index(query)
+        
+        # Search for similar documents
+        results = query_similar(query_vector, top_k=5)
+        
+        return {
+            "query": query,
+            "results": results
+        }
+        
+    except Exception as e:
+        logger.error(f"Error searching documents: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to search documents: {str(e)}")
 
 @app.post("/upload", response_model=UploadResponse)
 async def upload_pdf(file: UploadFile = File(...)):
@@ -321,6 +370,39 @@ async def list_documents():
     except Exception as e:
         logger.error(f"Error listing documents: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/clear-context")
+async def clear_context():
+    """Clear all indexed documents and context from Weaviate."""
+    try:
+        logger.info("Clearing all context from Weaviate...")
+        
+        # Get Weaviate client
+        weaviate_client = WeaviateClient(settings)
+        
+        # Delete the entire collection and recreate it
+        weaviate_client.delete_collection()
+        weaviate_client.init_schema()
+        
+        logger.info("Successfully cleared all context from Weaviate")
+        
+        return {
+            "status": "success",
+            "message": "Successfully cleared all context from Weaviate",
+            "documents_cleared": "all"
+        }
+        
+    except Exception as e:
+        logger.error(f"Error clearing context: {str(e)}")
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to clear context: {str(e)}"
+        )
+
+@app.get("/test-clear")
+async def test_clear():
+    """Test endpoint to verify server is running updated code."""
+    return {"message": "Clear context endpoint is available", "status": "ok"}
 
 @app.post("/upload-web")
 async def upload_web(data: dict):

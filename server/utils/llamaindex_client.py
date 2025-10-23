@@ -41,7 +41,10 @@ class LlamaIndexClient:
                 # Use default serverless endpoint
                 self.embed_url = "https://api.friendli.ai/v1/embeddings"
             
-            logger.info("✅ LlamaIndex (Simple Text Embeddings) initialized successfully")
+            # Configurable chunk size (default 2000 characters for better context)
+            self.chunk_size = getattr(settings, 'CHUNK_SIZE', 2000) if settings else int(os.getenv("CHUNK_SIZE", "2000"))
+            
+            logger.info(f"✅ LlamaIndex (Simple Text Embeddings) initialized successfully with chunk size: {self.chunk_size}")
             
         except Exception as e:
             logger.error(f"Failed to initialize LlamaIndex embedder: {str(e)}")
@@ -88,8 +91,8 @@ class LlamaIndexClient:
             Tuple of (chunks, embeddings)
         """
         try:
-            chunks = [context_text[i:i+1000] for i in range(0, len(context_text), 1000)]
-            logger.info(f"Created {len(chunks)} chunks from text")
+            chunks = [context_text[i:i+self.chunk_size] for i in range(0, len(context_text), self.chunk_size)]
+            logger.info(f"Created {len(chunks)} chunks from text (chunk size: {self.chunk_size})")
             
             embeddings = []
             for i, chunk in enumerate(chunks):
